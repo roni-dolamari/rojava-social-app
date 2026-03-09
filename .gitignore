@@ -1,0 +1,20 @@
+﻿# Flutter
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+build/
+*.g.dart
+*.freezed.dart
+
+# Keys
+.env
+lib/core/constants/app_constants.dart
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
