@@ -2,11 +2,11 @@ class CallModel {
   final String id;
   final String callerId;
   final String receiverId;
-  final String callType; // 'voice' or 'video'
-  final String status; // 'completed', 'missed', 'rejected', 'cancelled'
+  final String callType;
+  final String status;
   final DateTime createdAt;
   final DateTime? endedAt;
-  final int? duration; // in seconds
+  final int? duration;
   final String? callerName;
   final String? callerAvatar;
   final String? receiverName;

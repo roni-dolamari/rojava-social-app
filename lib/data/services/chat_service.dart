@@ -8,7 +8,6 @@ import '../../core/config/supabase_config.dart';
 class ChatService {
   final SupabaseClient _supabase = SupabaseConfig.client;
 
-  // Get or create conversation
   Future<String> getOrCreateConversation(String otherUserId) async {
     try {
       final conversationId = await _supabase.rpc(
@@ -21,7 +20,6 @@ class ChatService {
     }
   }
 
-  // Get all conversations
   Future<List<ConversationModel>> getConversations() async {
     try {
       final userId = _supabase.auth.currentUser?.id;
@@ -87,7 +85,6 @@ class ChatService {
     }
   }
 
-  // Get messages
   Future<List<MessageModel>> getMessages(String conversationId) async {
     try {
       final response = await _supabase
@@ -130,7 +127,6 @@ class ChatService {
     }
   }
 
-  // Send text message
   Future<MessageModel> sendTextMessage({
     required String conversationId,
     required String content,
@@ -158,7 +154,6 @@ class ChatService {
     }
   }
 
-  // Send voice message
   Future<MessageModel> sendVoiceMessage({
     required String conversationId,
     required File audioFile,
@@ -201,7 +196,51 @@ class ChatService {
     }
   }
 
-  // Send image message
+  Future<String> uploadVoiceFile(File audioFile) async {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) throw Exception('User not authenticated');
+
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final filePath = '$userId/voice_$timestamp.m4a';
+
+    await _supabase.storage
+        .from('chat-media')
+        .uploadBinary(
+          filePath,
+          await audioFile.readAsBytes(),
+          fileOptions: const FileOptions(contentType: 'audio/m4a'),
+        );
+
+    return _supabase.storage.from('chat-media').getPublicUrl(filePath);
+  }
+
+  Future<MessageModel> sendPreuploadedVoiceMessage({
+    required String conversationId,
+    required String mediaUrl,
+    required int duration,
+  }) async {
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) throw Exception('User not authenticated');
+
+      final response = await _supabase
+          .from('messages')
+          .insert({
+            'conversation_id': conversationId,
+            'sender_id': userId,
+            'message_type': 'voice',
+            'media_url': mediaUrl,
+            'media_duration': duration,
+          })
+          .select()
+          .single();
+
+      return MessageModel.fromJson(response);
+    } catch (e) {
+      rethrow;
+    }
+  }
+
   Future<MessageModel> sendImageMessage({
     required String conversationId,
     required File imageFile,
@@ -245,7 +284,6 @@ class ChatService {
     }
   }
 
-  // Send static location message
   Future<MessageModel> sendLocationMessage({
     required String conversationId,
     required double latitude,
@@ -275,7 +313,6 @@ class ChatService {
     }
   }
 
-  // Send live location message (creates the message, returns messageId for tracking)
   Future<MessageModel> sendLiveLocationMessage({
     required String conversationId,
     required double latitude,
@@ -309,7 +346,6 @@ class ChatService {
     }
   }
 
-  // Update live location coordinates
   Future<void> updateLiveLocation({
     required String messageId,
     required double latitude,
@@ -331,7 +367,20 @@ class ChatService {
     }
   }
 
-  // Mark as read
+  Future<void> stopLiveLocation(String messageId) async {
+    try {
+      await _supabase
+          .from('messages')
+          .update({
+            'live_location_expires_at':
+                DateTime.now().toUtc().toIso8601String(),
+          })
+          .eq('id', messageId);
+    } catch (e) {
+      print('⚠️ Stop live location error: $e');
+    }
+  }
+
   Future<void> markAsRead(String conversationId) async {
     try {
       await _supabase.rpc('mark_as_read', params: {'conv_id': conversationId});
@@ -340,7 +389,6 @@ class ChatService {
     }
   }
 
-  // Delete message
   Future<void> deleteMessage(String messageId) async {
     try {
       await _supabase
@@ -391,7 +439,6 @@ class ChatService {
         )
         .subscribe();
 
-    // Also subscribe to UPDATE events for live location
     _supabase
         .channel('${channelName}_updates')
         .onPostgresChanges(
@@ -408,7 +455,6 @@ class ChatService {
               final updatedRecord = Map<String, dynamic>.from(
                 payload.newRecord,
               );
-              // Only relay live_location updates
               if (updatedRecord['message_type'] == 'live_location') {
                 final profile = await _supabase
                     .from('profiles')
@@ -438,7 +484,6 @@ class ChatService {
     return controller.stream;
   }
 
-  // Create a call
   Future<String> createCall({
     required String conversationId,
     required String receiverId,
@@ -466,7 +511,6 @@ class ChatService {
     }
   }
 
-  // Update call status
   Future<void> updateCallStatus({
     required String callId,
     required String status,

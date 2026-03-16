@@ -8,22 +8,18 @@ class AuthService {
   final SupabaseClient _supabase = SupabaseConfig.client;
   final BanCheckService _banCheckService = BanCheckService();
 
-  // Sign up with ban checks
   Future<UserModel?> signUp({
     required String email,
     required String password,
     required String fullName,
   }) async {
     try {
-      // Get device ID
       final deviceId = await DeviceService.getDeviceId();
       print('🔐 Device ID: $deviceId');
 
-      // Perform pre-auth checks
       final preAuthCheck = await _banCheckService.performPreAuthCheck(deviceId);
 
       if (preAuthCheck['allowed'] != true) {
-        // Log blocked attempt
         await _banCheckService.logSignupAttempt(
           deviceId: deviceId,
           success: false,
@@ -33,7 +29,6 @@ class AuthService {
         throw Exception(preAuthCheck['reason']);
       }
 
-      // Proceed with signup
       final response = await _supabase.auth.signUp(
         email: email,
         password: password,
@@ -41,16 +36,13 @@ class AuthService {
       );
 
       if (response.user != null) {
-        // Register device
         await _banCheckService.registerDevice(response.user!.id);
 
-        // Log successful attempt
         await _banCheckService.logSignupAttempt(
           deviceId: deviceId,
           success: true,
         );
 
-        // Get user profile
         return await getUserProfile(response.user!.id);
       }
 
@@ -61,17 +53,14 @@ class AuthService {
     }
   }
 
-  // Sign in with ban checks
   Future<UserModel?> signIn({
     required String email,
     required String password,
   }) async {
     try {
-      // Get device ID
       final deviceId = await DeviceService.getDeviceId();
       print('🔐 Device ID: $deviceId');
 
-      // Check if device is banned
       final deviceBanned = await _banCheckService.isDeviceBanned(deviceId);
       if (deviceBanned) {
         await _banCheckService.logLoginAttempt(
@@ -83,7 +72,6 @@ class AuthService {
         throw Exception('This device has been banned from accessing the app.');
       }
 
-      // Check login rate limit
       final canLogin = await _banCheckService.canAttemptLogin(email, deviceId);
       if (!canLogin) {
         await _banCheckService.logLoginAttempt(
@@ -97,19 +85,16 @@ class AuthService {
         );
       }
 
-      // Attempt login
       final response = await _supabase.auth.signInWithPassword(
         email: email,
         password: password,
       );
 
       if (response.user != null) {
-        // Check if user is banned
         final userBanned = await _banCheckService.isUserBanned(
           response.user!.id,
         );
         if (userBanned) {
-          // Sign out immediately
           await _supabase.auth.signOut();
 
           await _banCheckService.logLoginAttempt(
@@ -124,10 +109,8 @@ class AuthService {
           );
         }
 
-        // Register/update device
         await _banCheckService.registerDevice(response.user!.id);
 
-        // Log successful login
         await _banCheckService.logLoginAttempt(
           email: email,
           deviceId: deviceId,
@@ -139,7 +122,6 @@ class AuthService {
 
       return null;
     } catch (e) {
-      // Log failed attempt for rate limiting
       try {
         final deviceId = await DeviceService.getDeviceId();
         await _banCheckService.logLoginAttempt(
@@ -157,7 +139,6 @@ class AuthService {
     }
   }
 
-  // Sign out
   Future<void> signOut() async {
     try {
       await _supabase.auth.signOut();
@@ -167,7 +148,6 @@ class AuthService {
     }
   }
 
-  // Get user profile
   Future<UserModel?> getUserProfile(String userId) async {
     try {
       final response = await _supabase
@@ -186,7 +166,6 @@ class AuthService {
     }
   }
 
-  // Reset password
   Future<void> resetPassword(String email) async {
     try {
       await _supabase.auth.resetPasswordForEmail(email);
@@ -196,7 +175,6 @@ class AuthService {
     }
   }
 
-  // Update profile
   Future<void> updateProfile({
     required String userId,
     String? fullName,

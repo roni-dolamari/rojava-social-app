@@ -2,7 +2,7 @@ class StoryModel {
   final String id;
   final String userId;
   final String mediaUrl;
-  final String mediaType; // 'image' or 'video'
+  final String mediaType;
   final String? thumbnailUrl;
   final String? caption;
   final DateTime createdAt;

@@ -43,7 +43,7 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
           .eq('id', widget.userId)
           .single();
 
-      // Check if blocked
+
       final blockCheck = await supabase
           .from('blocked_users')
           .select('id')
@@ -130,7 +130,8 @@ class _UserProfileScreenState extends ConsumerState<UserProfileScreen> {
           .from('blocked_users')
           .delete()
           .eq('blocker_id', currentUserId!)
-          .eq('blocked_id', widget.userId);
+          .eq('blocked_id', widget.userId)
+          .select('id');
 
       setState(() => _isBlocked = false);
 

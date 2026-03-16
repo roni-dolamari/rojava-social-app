@@ -70,7 +70,6 @@ class ChatController extends StateNotifier<ChatState> {
   }
 
   Future<void> loadMessages(String conversationId) async {
-    // Only show loading if no messages yet
     if (state.currentConversationId != conversationId) {
       state = state.copyWith(
         messages: [],
@@ -94,12 +93,10 @@ class ChatController extends StateNotifier<ChatState> {
         currentConversationId: conversationId,
       );
 
-      // Mark as read in background - don't await
       _chatService.markAsRead(conversationId).catchError((e) {
         print('⚠️ Mark as read error: $e');
       });
 
-      // Subscribe to real-time
       _messageSubscription = _chatService
           .subscribeToNewMessages(conversationId)
           .listen((newMessage) {

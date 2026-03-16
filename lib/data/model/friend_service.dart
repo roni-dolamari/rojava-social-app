@@ -7,7 +7,6 @@ import '../../core/config/supabase_config.dart';
 class FriendService {
   final SupabaseClient _supabase = SupabaseConfig.client;
 
-  // Search users - WORKING VERSION
   Future<List<UserSearchModel>> searchUsers(String query) async {
     try {
       print('🔍 Searching for: "$query"');
@@ -18,7 +17,6 @@ class FriendService {
         throw Exception('User not authenticated');
       }
 
-      // Search profiles
       final profilesResponse = await _supabase
           .from('profiles')
           .select('id, full_name, avatar_url')
@@ -33,7 +31,6 @@ class FriendService {
         try {
           final userId = profile['id'] as String;
 
-          // Get user email from auth.users through a join
           String? email;
           try {
             final userEmail = await _supabase.rpc(
@@ -46,7 +43,6 @@ class FriendService {
             email = 'user@example.com';
           }
 
-          // Check if already friends
           final friendCheck = await _supabase
               .from('friends')
               .select('id')
@@ -56,7 +52,6 @@ class FriendService {
 
           final isFriend = friendCheck != null;
 
-          // Check request status
           String? requestStatus;
           try {
             final requestCheck = await _supabase
@@ -99,7 +94,6 @@ class FriendService {
     }
   }
 
-  // Send friend request
   Future<void> sendFriendRequest(String receiverId) async {
     try {
       final userId = _supabase.auth.currentUser?.id;
@@ -115,7 +109,6 @@ class FriendService {
     }
   }
 
-  // Cancel sent friend request
   Future<void> cancelFriendRequest(String receiverId) async {
     try {
       final userId = _supabase.auth.currentUser?.id;
@@ -133,7 +126,6 @@ class FriendService {
     }
   }
 
-  // Get received friend requests - FIXED VERSION
   Future<List<FriendRequestModel>> getReceivedRequests() async {
     try {
       final userId = _supabase.auth.currentUser?.id;
@@ -157,7 +149,6 @@ class FriendService {
           final senderId = json['sender_id'] as String;
           print('📥 Processing request from sender: $senderId');
 
-          // Get sender profile
           final senderProfile = await _supabase
               .from('profiles')
               .select('full_name, avatar_url')
@@ -174,7 +165,6 @@ class FriendService {
             senderName = senderProfile['full_name'] as String?;
             senderAvatar = senderProfile['avatar_url'] as String?;
 
-            // Try to get email, but don't fail if it doesn't work
             try {
               final emailResult = await _supabase.rpc(
                 'get_user_email',
@@ -203,7 +193,6 @@ class FriendService {
         } catch (e, stackTrace) {
           print('⚠️ Error processing request: $e');
           print('⚠️ Stack trace: $stackTrace');
-          // Add with minimal info if error
           requests.add(
             FriendRequestModel.fromJson({
               ...json,
@@ -224,7 +213,6 @@ class FriendService {
     }
   }
 
-  // Get sent friend requests - FIXED VERSION
   Future<List<FriendRequestModel>> getSentRequests() async {
     try {
       final userId = _supabase.auth.currentUser?.id;
@@ -248,7 +236,6 @@ class FriendService {
           final receiverId = json['receiver_id'] as String;
           print('📤 Processing request to receiver: $receiverId');
 
-          // Get receiver profile
           final receiverProfile = await _supabase
               .from('profiles')
               .select('full_name, avatar_url')
@@ -279,7 +266,6 @@ class FriendService {
         } catch (e, stackTrace) {
           print('⚠️ Error processing sent request: $e');
           print('⚠️ Stack trace: $stackTrace');
-          // Add without details if error
           requests.add(
             FriendRequestModel.fromJson({
               ...json,
@@ -299,7 +285,6 @@ class FriendService {
     }
   }
 
-  // Accept friend request
   Future<void> acceptFriendRequest(String requestId) async {
     try {
       await _supabase.rpc(
@@ -312,7 +297,6 @@ class FriendService {
     }
   }
 
-  // Reject friend request
   Future<void> rejectFriendRequest(String requestId) async {
     try {
       await _supabase.rpc(
@@ -325,7 +309,6 @@ class FriendService {
     }
   }
 
-  // Get friends list - FIXED VERSION
   Future<List<FriendModel>> getFriends() async {
     try {
       final userId = _supabase.auth.currentUser?.id;
@@ -333,7 +316,6 @@ class FriendService {
 
       print('📋 Fetching friends for user: $userId');
 
-      // Get all friend relationships
       final response = await _supabase
           .from('friends')
           .select('*')
@@ -349,7 +331,6 @@ class FriendService {
           final friendId = json['friend_id'] as String;
           print('📋 Processing friend: $friendId');
 
-          // Get friend profile separately
           final friendProfile = await _supabase
               .from('profiles')
               .select('full_name, avatar_url')
@@ -366,7 +347,6 @@ class FriendService {
             friendName = friendProfile['full_name'] as String?;
             friendAvatar = friendProfile['avatar_url'] as String?;
 
-            // Try to get email
             try {
               final emailResult = await _supabase.rpc(
                 'get_user_email',
@@ -387,7 +367,7 @@ class FriendService {
               'friend_name': friendName ?? 'Unknown User',
               'friend_avatar': friendAvatar,
               'friend_email': friendEmail,
-              'is_online': false, // You can implement online status later
+              'is_online': false,
             }),
           );
 
@@ -395,7 +375,6 @@ class FriendService {
         } catch (e, stackTrace) {
           print('⚠️ Error processing friend: $e');
           print('⚠️ Stack trace: $stackTrace');
-          // Add with minimal info if error
           friends.add(
             FriendModel.fromJson({
               ...json,
@@ -417,7 +396,6 @@ class FriendService {
     }
   }
 
-  // Remove friend
   Future<void> removeFriend(String friendId) async {
     try {
       await _supabase.rpc(
@@ -430,7 +408,6 @@ class FriendService {
     }
   }
 
-  // Get friend count
   Future<int> getFriendCount() async {
     try {
       final userId = _supabase.auth.currentUser?.id;

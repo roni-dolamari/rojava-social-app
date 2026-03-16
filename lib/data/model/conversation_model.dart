@@ -4,7 +4,6 @@ class ConversationModel {
   final DateTime updatedAt;
   final DateTime lastMessageAt;
 
-  // Populated from joins
   final String? otherUserName;
   final String? otherUserAvatar;
   final String? otherUserId;

@@ -5,7 +5,6 @@ import 'device_service.dart';
 class BanCheckService {
   final SupabaseClient _supabase = SupabaseConfig.client;
 
-  // Check if device is banned
   Future<bool> isDeviceBanned(String deviceId) async {
     try {
       final response = await _supabase
@@ -21,7 +20,6 @@ class BanCheckService {
     }
   }
 
-  // Check if user is banned
   Future<bool> isUserBanned(String userId) async {
     try {
       final response = await _supabase
@@ -37,7 +35,6 @@ class BanCheckService {
     }
   }
 
-  // Register device for a user
   Future<void> registerDevice(String userId) async {
     try {
       final deviceId = await DeviceService.getDeviceId();
@@ -54,10 +51,8 @@ class BanCheckService {
     }
   }
 
-  // Check rate limiting for signup
   Future<bool> canAttemptSignup(String deviceId) async {
     try {
-      // Check attempts in last hour
       final oneHourAgo = DateTime.now().subtract(const Duration(hours: 1));
 
       final response = await _supabase
@@ -68,15 +63,13 @@ class BanCheckService {
 
       final attemptCount = (response as List).length;
 
-      // Allow max 3 signup attempts per hour per device
       return attemptCount < 3;
     } catch (e) {
       print('Error checking signup rate limit: $e');
-      return true; // Allow on error to not block legitimate users
+      return true;
     }
   }
 
-  // Log signup attempt
   Future<void> logSignupAttempt({
     required String deviceId,
     required bool success,
@@ -94,10 +87,8 @@ class BanCheckService {
     }
   }
 
-  // Check rate limiting for login
   Future<bool> canAttemptLogin(String email, String deviceId) async {
     try {
-      // Check failed login attempts in last 15 minutes
       final fifteenMinAgo = DateTime.now().subtract(
         const Duration(minutes: 15),
       );
@@ -112,7 +103,6 @@ class BanCheckService {
 
       final failedAttempts = (response as List).length;
 
-      // Allow max 5 failed login attempts per 15 minutes
       return failedAttempts < 5;
     } catch (e) {
       print('Error checking login rate limit: $e');
@@ -120,7 +110,6 @@ class BanCheckService {
     }
   }
 
-  // Log login attempt
   Future<void> logLoginAttempt({
     required String email,
     required String deviceId,
@@ -140,10 +129,8 @@ class BanCheckService {
     }
   }
 
-  // Comprehensive pre-auth check
   Future<Map<String, dynamic>> performPreAuthCheck(String deviceId) async {
     try {
-      // Check if device is banned
       final deviceBanned = await isDeviceBanned(deviceId);
       if (deviceBanned) {
         return {
@@ -152,7 +139,6 @@ class BanCheckService {
         };
       }
 
-      // Check signup rate limit
       final canSignup = await canAttemptSignup(deviceId);
       if (!canSignup) {
         return {
@@ -164,7 +150,7 @@ class BanCheckService {
       return {'allowed': true};
     } catch (e) {
       print('Error in pre-auth check: $e');
-      return {'allowed': true}; // Allow on error to not block legitimate users
+      return {'allowed': true};
     }
   }
 }

@@ -14,7 +14,10 @@ import '../widgets/voice_recorder_widget.dart';
 import 'voice_call_screen.dart';
 import 'video_call_screen.dart';
 import '../../../data/services/chat_service.dart';
+import '../../../data/services/scheduled_message_service.dart';
 import '../../../core/config/supabase_config.dart';
+import '../widgets/scheduled_messages_sheet.dart';
+import 'package:intl/intl.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   final String conversationId;
@@ -55,6 +58,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Timer? _liveLocationTimer;
   final ChatService _chatService = ChatService();
 
+  // Block state
+  bool _iBlockedThem = false;
+  bool _theyBlockedMe = false;
+
+  // Schedule state
+  DateTime? _scheduledAt;
+  Timer? _scheduleCheckTimer;
+  final _scheduledMsgService = ScheduledMessageService();
+
   @override
   void initState() {
     super.initState();
@@ -68,12 +80,81 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     _messageController.addListener(() {
       if (mounted) setState(() {});
     });
+    _checkBlockStatus();
+    _startScheduleTimer();
+  }
+
+  void _startScheduleTimer() {
+    _scheduleCheckTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) _checkAndSendDue();
+    });
+    // Also check immediately on open
+    Future.microtask(_checkAndSendDue);
+  }
+
+  Future<void> _checkAndSendDue() async {
+    final sent = await _scheduledMsgService.sendDueMessages(
+      widget.conversationId,
+      _chatService,
+    );
+    if (sent > 0 && mounted) {
+      ref
+          .read(chatControllerProvider.notifier)
+          .loadMessages(widget.conversationId);
+    }
+  }
+
+  Future<void> _checkBlockStatus() async {
+    final supabase = SupabaseConfig.client;
+    final currentUserId = supabase.auth.currentUser?.id;
+    if (currentUserId == null) return;
+
+    final results = await Future.wait([
+      supabase
+          .from('blocked_users')
+          .select('id')
+          .eq('blocker_id', currentUserId)
+          .eq('blocked_id', widget.otherUserId)
+          .maybeSingle(),
+      supabase
+          .from('blocked_users')
+          .select('id')
+          .eq('blocker_id', widget.otherUserId)
+          .eq('blocked_id', currentUserId)
+          .maybeSingle(),
+    ]);
+
+    if (mounted) {
+      setState(() {
+        _iBlockedThem = results[0] != null;
+        _theyBlockedMe = results[1] != null;
+      });
+    }
+  }
+
+  Future<void> _unblockAndRefresh() async {
+    final supabase = SupabaseConfig.client;
+    final currentUserId = supabase.auth.currentUser?.id;
+    if (currentUserId == null) return;
+    try {
+      await supabase
+          .from('blocked_users')
+          .delete()
+          .eq('blocker_id', currentUserId)
+          .eq('blocked_id', widget.otherUserId)
+          .select('id');
+      if (mounted) setState(() => _iBlockedThem = false);
+    } catch (e) {
+      if (mounted) _showError('Could not unblock: $e');
+    }
   }
 
   @override
   void dispose() {
     _liveLocationTimer?.cancel();
     _liveLocationTimer = null;
+    _scheduleCheckTimer?.cancel();
+    _scheduleCheckTimer = null;
     _messageController.dispose();
     _scrollController.dispose();
     _focusNode.dispose();
@@ -82,9 +163,78 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   // ── Messaging ─────────────────────────────────────────────────────────────
 
+  Future<void> _pickScheduleTime() async {
+    final now = DateTime.now();
+    final date = await showDatePicker(
+      context: context,
+      initialDate: now.add(const Duration(hours: 1)),
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 365)),
+      helpText: 'SEND DATE',
+    );
+    if (date == null || !mounted) return;
+
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(now.add(const Duration(hours: 1))),
+      helpText: 'SEND TIME',
+    );
+    if (time == null || !mounted) return;
+
+    final scheduled = DateTime(
+      date.year, date.month, date.day, time.hour, time.minute,
+    );
+    if (scheduled.isBefore(DateTime.now().add(const Duration(minutes: 1)))) {
+      _showError('Please pick a time at least 1 minute from now.');
+      return;
+    }
+    setState(() => _scheduledAt = scheduled);
+  }
+
+  void _clearSchedule() => setState(() => _scheduledAt = null);
+
   void _sendMessage() async {
     final text = _messageController.text.trim();
     if (text.isEmpty) return;
+
+    if (_scheduledAt != null) {
+      // Schedule for later
+      final sendAt = _scheduledAt!;
+      _messageController.clear();
+      setState(() => _scheduledAt = null);
+      try {
+        await _scheduledMsgService.scheduleMessage(
+          conversationId: widget.conversationId,
+          content: text,
+          scheduledAt: sendAt,
+        );
+        if (mounted) {
+          final label = DateFormat('MMM d \'at\' h:mm a').format(sendAt);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.schedule_send_rounded,
+                      color: Colors.white, size: 18),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text('Scheduled for $label')),
+                ],
+              ),
+              backgroundColor: const Color(0xFF6366F1),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      } catch (e) {
+        _showError('Could not schedule message: $e');
+      }
+      return;
+    }
+
+    // Send immediately
     _messageController.clear();
     try {
       final success = await ref
@@ -97,6 +247,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     } catch (e) {
       _showError('Error: ${e.toString()}');
     }
+  }
+
+  void _openScheduledSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) =>
+          ScheduledMessagesSheet(conversationId: widget.conversationId),
+    );
   }
 
   void _scrollToBottom() {
@@ -512,6 +672,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   void _stopLiveLocation() {
     _liveLocationTimer?.cancel();
     _liveLocationTimer = null;
+    if (_activeLiveMessageId != null) {
+      _chatService.stopLiveLocation(_activeLiveMessageId!);
+    }
     _activeLiveMessageId = null;
     if (mounted) setState(() => _isSharingLive = false);
   }
@@ -618,6 +781,42 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     _scrollToBottom();
   }
 
+  Future<void> _onVoiceRecordingComplete(File file, int duration) async {
+    final sendAt = _scheduledAt!;
+    setState(() => _scheduledAt = null);
+    try {
+      final mediaUrl = await _chatService.uploadVoiceFile(file);
+      await _scheduledMsgService.scheduleVoiceMessage(
+        conversationId: widget.conversationId,
+        mediaUrl: mediaUrl,
+        mediaDuration: duration,
+        scheduledAt: sendAt,
+      );
+      if (mounted) {
+        final label = DateFormat('MMM d \'at\' h:mm a').format(sendAt);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.schedule_send_rounded,
+                    color: Colors.white, size: 18),
+                const SizedBox(width: 10),
+                Expanded(child: Text('Voice scheduled for $label')),
+              ],
+            ),
+            backgroundColor: const Color(0xFF6366F1),
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) _showError('Could not schedule voice message: $e');
+    }
+  }
+
   void _showError(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -677,6 +876,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     },
                   ),
           ),
+          if (_scheduledAt != null) _buildScheduleBanner(theme),
           if (_showAttachments && !_isRecording) _buildAttachmentOptions(theme),
           if (chatState.isSending)
             Padding(
@@ -697,7 +897,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 ],
               ),
             ),
-          _buildMessageInput(theme),
+          if (_iBlockedThem || _theyBlockedMe)
+            _buildBlockedInputBar(theme)
+          else
+            _buildMessageInput(theme),
         ],
       ),
     );
@@ -781,22 +984,23 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         )
                       : null,
                 ),
-                Positioned(
-                  bottom: 0,
-                  right: 0,
-                  child: Container(
-                    width: 12,
-                    height: 12,
-                    decoration: BoxDecoration(
-                      color: Colors.green,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: theme.colorScheme.surface,
-                        width: 2,
+                if (!_iBlockedThem && !_theyBlockedMe)
+                  Positioned(
+                    bottom: 0,
+                    right: 0,
+                    child: Container(
+                      width: 12,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        color: Colors.green,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: theme.colorScheme.surface,
+                          width: 2,
+                        ),
                       ),
                     ),
                   ),
-                ),
               ],
             ),
             const SizedBox(width: 12),
@@ -811,13 +1015,23 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       color: theme.colorScheme.onSurface,
                     ),
                   ),
-                  Text(
-                    'Active now',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: Colors.green,
-                      fontSize: 12,
+                  if (_iBlockedThem)
+                    const Text(
+                      'Blocked',
+                      style: TextStyle(
+                        color: Colors.red,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    )
+                  else if (!_theyBlockedMe)
+                    Text(
+                      'Active now',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: Colors.green,
+                        fontSize: 12,
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),
@@ -832,6 +1046,29 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         IconButton(
           icon: Icon(Icons.videocam, color: theme.colorScheme.primary),
           onPressed: _startVideoCall,
+        ),
+        IconButton(
+          tooltip: 'Scheduled messages',
+          icon: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Icon(Icons.schedule_rounded, color: theme.colorScheme.onSurface),
+              if (_scheduledAt != null)
+                Positioned(
+                  top: -2,
+                  right: -2,
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF6366F1),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          onPressed: _openScheduledSheet,
         ),
         PopupMenuButton(
           icon: Icon(Icons.more_vert, color: theme.colorScheme.onSurface),
@@ -963,6 +1200,93 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     );
   }
 
+  Widget _buildScheduleBanner(ThemeData theme) {
+    final label = DateFormat('EEE, MMM d \'at\' h:mm a').format(_scheduledAt!);
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
+      color: const Color(0xFF6366F1).withValues(alpha: 0.08),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        children: [
+          const Icon(Icons.schedule_send_rounded,
+              size: 16, color: Color(0xFF6366F1)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Scheduled · $label',
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF6366F1),
+              ),
+            ),
+          ),
+          GestureDetector(
+            onTap: _clearSchedule,
+            child: const Icon(Icons.close, size: 16, color: Color(0xFF6366F1)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBlockedInputBar(ThemeData theme) {
+    final isDark = theme.brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        child: _iBlockedThem
+            ? Row(
+                children: [
+                  const Icon(Icons.block, color: Colors.red, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'You blocked ${widget.otherUserName}. Unblock to send messages.',
+                      style: TextStyle(
+                        color: isDark ? Colors.white60 : Colors.black54,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  TextButton(
+                    onPressed: _unblockAndRefresh,
+                    child: const Text(
+                      'Unblock',
+                      style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              )
+            : Row(
+                children: [
+                  const Icon(Icons.block, color: Colors.grey, size: 20),
+                  const SizedBox(width: 10),
+                  Text(
+                    'You can\'t send messages to this person.',
+                    style: TextStyle(
+                      color: isDark ? Colors.white60 : Colors.black54,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+
   Widget _buildMessageInput(ThemeData theme) {
     final hasText = _messageController.text.trim().isNotEmpty;
 
@@ -1028,14 +1352,26 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             if (_isRecording)
               _buildMicButton(theme, isActive: true)
             else if (hasText)
-              Container(
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primary,
-                  shape: BoxShape.circle,
-                ),
-                child: IconButton(
-                  icon: const Icon(Icons.send, color: Colors.white, size: 20),
-                  onPressed: _sendMessage,
+              GestureDetector(
+                onLongPress: _pickScheduleTime,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  decoration: BoxDecoration(
+                    color: _scheduledAt != null
+                        ? const Color(0xFF6366F1)
+                        : theme.colorScheme.primary,
+                    shape: BoxShape.circle,
+                  ),
+                  child: IconButton(
+                    icon: Icon(
+                      _scheduledAt != null
+                          ? Icons.schedule_send_rounded
+                          : Icons.send,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                    onPressed: _sendMessage,
+                  ),
                 ),
               )
             else
@@ -1108,6 +1444,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         conversationId: widget.conversationId,
         onCancel: _onRecordingCancelled,
         onSent: _onRecordingSent,
+        onComplete: _scheduledAt != null ? _onVoiceRecordingComplete : null,
       ),
     );
   }

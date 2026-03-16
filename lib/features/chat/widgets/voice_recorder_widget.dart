@@ -13,11 +13,16 @@ class VoiceRecorderWidget extends ConsumerStatefulWidget {
   final VoidCallback onCancel;
   final VoidCallback onSent;
 
+  /// When provided, `send()` calls this instead of sending immediately.
+  /// Parent receives (audioFile, durationSeconds) and handles scheduling.
+  final void Function(File file, int duration)? onComplete;
+
   const VoiceRecorderWidget({
     Key? key,
     required this.conversationId,
     required this.onCancel,
     required this.onSent,
+    this.onComplete,
   }) : super(key: key);
 
   @override
@@ -85,6 +90,12 @@ class VoiceRecorderWidgetState extends ConsumerState<VoiceRecorderWidget>
     if (resolvedPath != null && mounted) {
       final file = File(resolvedPath);
       if (await file.exists()) {
+        if (widget.onComplete != null) {
+          // Hand off to parent (e.g. for scheduling)
+          widget.onComplete!(file, _recordDuration);
+          if (mounted) widget.onSent();
+          return;
+        }
         await ref
             .read(chatControllerProvider.notifier)
             .sendVoiceMessage(

@@ -6,7 +6,6 @@ import '../../core/config/supabase_config.dart';
 class StoryService {
   final SupabaseClient _supabase = SupabaseConfig.client;
 
-  // Get current user's friend IDs
   Future<Set<String>> _getFriendIds() async {
     final userId = _supabase.auth.currentUser?.id;
     if (userId == null) return {};
@@ -24,7 +23,6 @@ class StoryService {
     }
   }
 
-  // Upload story media (image or video)
   Future<String> uploadStoryMedia({
     required String userId,
     required File mediaFile,
@@ -71,7 +69,6 @@ class StoryService {
     }
   }
 
-  // Create story
   Future<StoryModel> createStory({
     required String mediaUrl,
     required String mediaType,
@@ -99,13 +96,11 @@ class StoryService {
     }
   }
 
-  // Get all stories — FRIENDS ONLY
   Future<Map<String, List<StoryModel>>> getAllStories() async {
     try {
       final currentUserId = _supabase.auth.currentUser?.id;
       print('🔍 Current user ID: $currentUserId');
 
-      // Get friend IDs first
       final friendIds = await _getFriendIds();
       print('👥 Friend IDs: $friendIds');
 
@@ -114,7 +109,6 @@ class StoryService {
         return {};
       }
 
-      // Fetch only stories from friends
       final response = await _supabase
           .from('stories')
           .select()
@@ -148,7 +142,6 @@ class StoryService {
         }
       }
 
-      // Mark stories already viewed by current user
       if (currentUserId != null) {
         try {
           final viewsResponse = await _supabase
@@ -170,7 +163,6 @@ class StoryService {
         }
       }
 
-      // Group by user
       final Map<String, List<StoryModel>> groupedStories = {};
       for (var story in stories) {
         groupedStories.putIfAbsent(story.userId, () => []).add(story);
@@ -185,7 +177,6 @@ class StoryService {
     }
   }
 
-  // Get stories by user
   Future<List<StoryModel>> getStoriesByUser(String userId) async {
     try {
       print('📦 Fetching stories for user: $userId');
@@ -219,7 +210,6 @@ class StoryService {
     }
   }
 
-  // Mark story as viewed
   Future<void> markStoryAsViewed(String storyId) async {
     try {
       final userId = _supabase.auth.currentUser?.id;
@@ -231,11 +221,9 @@ class StoryService {
       });
     } catch (e) {
       print('Mark viewed error: $e');
-      // Ignore if already viewed (unique constraint)
     }
   }
 
-  // Get story views count
   Future<int> getStoryViewsCount(String storyId) async {
     try {
       final response = await _supabase
@@ -250,7 +238,6 @@ class StoryService {
     }
   }
 
-  // Delete story
   Future<void> deleteStory(String storyId) async {
     try {
       await _supabase.from('stories').delete().eq('id', storyId);
@@ -260,7 +247,6 @@ class StoryService {
     }
   }
 
-  // Get current user's own stories
   Future<List<StoryModel>> getMyStories() async {
     try {
       final userId = _supabase.auth.currentUser?.id;

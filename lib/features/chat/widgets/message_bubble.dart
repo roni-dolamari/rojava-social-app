@@ -582,6 +582,8 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
         return _buildImageMessage();
       case 'location':
         return _buildLocationMessage(theme);
+      case 'live_location':
+        return _buildLiveLocationMessage(theme);
       default:
         return Text(
           widget.message.content ?? 'Unsupported message',
@@ -689,6 +691,154 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
             ),
           ),
       ],
+    );
+  }
+
+  Widget _buildLiveLocationMessage(ThemeData theme) {
+    final isActive = widget.message.isLiveLocationActive;
+    final expiresAt = widget.message.liveLocationExpiresAt;
+    final lat = widget.message.locationLat;
+    final lng = widget.message.locationLng;
+    final address = widget.message.locationAddress;
+
+    String timeLabel = '';
+    if (isActive && expiresAt != null) {
+      final remaining = expiresAt.difference(DateTime.now());
+      final minutes = remaining.inMinutes;
+      final seconds = remaining.inSeconds % 60;
+      timeLabel = minutes > 0 ? '${minutes}m remaining' : '${seconds}s remaining';
+    }
+
+    final coordLabel = (lat != null && lng != null)
+        ? '${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}'
+        : 'Location';
+
+    return SizedBox(
+      width: 250,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              width: 250,
+              height: 150,
+              color: isActive ? Colors.green[50] : Colors.grey[200],
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Icon(
+                    Icons.location_on,
+                    size: 60,
+                    color: isActive ? Colors.green[600] : Colors.grey[400],
+                  ),
+                  // LIVE / Ended badge
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: isActive ? Colors.green : Colors.grey[600],
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (isActive) ...[
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: const BoxDecoration(
+                                color: Colors.white,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                          ],
+                          Text(
+                            isActive ? 'LIVE' : 'Ended',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // Address / coords label
+                  Positioned(
+                    bottom: 8,
+                    left: 8,
+                    right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        address ?? coordLabel,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (isActive && timeLabel.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Icon(Icons.timer_outlined, size: 13, color: Colors.green[600]),
+                const SizedBox(width: 4),
+                Text(
+                  timeLabel,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.green[600],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: (lat != null && lng != null)
+                  ? () => launchUrl(
+                        Uri.parse(
+                            'https://www.google.com/maps?q=$lat,$lng'),
+                        mode: LaunchMode.externalApplication,
+                      )
+                  : null,
+              icon: const Icon(Icons.map, size: 16),
+              label: Text(isActive ? 'Track live' : 'Open in map'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isMyMessage
+                    ? Colors.white.withValues(alpha: 0.2)
+                    : theme.colorScheme.primary.withValues(alpha: 0.1),
+                foregroundColor: isMyMessage
+                    ? Colors.white
+                    : theme.colorScheme.primary,
+                padding: const EdgeInsets.symmetric(vertical: 8),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

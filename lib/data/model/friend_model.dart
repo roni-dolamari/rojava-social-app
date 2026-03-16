@@ -4,7 +4,6 @@ class FriendModel {
   final String friendId;
   final DateTime createdAt;
 
-  // Additional fields from profile
   final String? friendName;
   final String? friendAvatar;
   final String? friendEmail;

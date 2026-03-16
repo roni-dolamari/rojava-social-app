@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
@@ -12,7 +13,6 @@ import 'package:rojava/data/model/friend_request_model.dart';
 import 'package:rojava/data/model/story_model.dart';
 import 'package:rojava/data/services/incoming_call_service.dart';
 import 'package:rojava/features/calls/calls_provider.dart';
-import 'package:rojava/features/calls/screens/calls_screen.dart';
 import 'package:rojava/features/chat/screens/chat_screen.dart';
 import 'package:rojava/features/chat/screens/incoming_call_screen.dart';
 import 'package:rojava/features/friends/controllers/friend_controller.dart';
@@ -20,7 +20,6 @@ import 'package:rojava/features/home/screen/user_profile_screen.dart';
 
 import 'package:rojava/features/auth/controllers/auth_controller.dart';
 import 'package:rojava/features/friends/screens/add_friend_screen.dart';
-import 'package:rojava/features/friends/screens/friend_requests_screen.dart' hide AddFriendScreen;
 import 'package:rojava/features/profile/screens/profile_screen.dart';
 import 'package:rojava/features/stories/controllers/story_controller.dart';
 import 'package:rojava/features/stories/screens/create_story_screen.dart';
@@ -115,6 +114,9 @@ final conversationsProvider = FutureProvider<List<ConversationItem>>((ref) async
           break;
         case 'location':
           lastMsg = '📍 Location';
+          break;
+        case 'live_location':
+          lastMsg = '📍 Live Location';
           break;
         case 'file':
           lastMsg = '📎 File';
@@ -322,6 +324,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final unreadCount = friendState.receivedRequests.length;
 
     return Scaffold(
+      extendBody: true,
       appBar: AppBar(
         title: AnimatedSwitcher(
           duration: const Duration(milliseconds: 250),
@@ -386,158 +389,198 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   }
 
   Widget _buildBeautifulNavBar(ThemeData theme, int unreadCount) {
-    return Container(
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.12),
-            blurRadius: 20,
-            offset: const Offset(0, -4),
-          ),
-        ],
-      ),
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: List.generate(_navItems.length, (i) {
-              final item = _navItems[i];
-              final isActive = _currentIndex == i;
-              final badge = i == 2 ? unreadCount : 0;
-              return _buildNavPill(
-                theme: theme,
-                item: item,
-                index: i,
-                isActive: isActive,
-                badgeCount: badge,
-                scaleAnim: _navScaleAnims[i],
-                slideAnim: _navSlideAnims[i],
-              );
-            }),
+    final isDark = theme.brightness == Brightness.dark;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(40),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+          child: Container(
+            decoration: BoxDecoration(
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.07)
+                  : Colors.white.withValues(alpha: 0.88),
+              borderRadius: BorderRadius.circular(40),
+              border: Border.all(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.10)
+                    : Colors.black.withValues(alpha: 0.05),
+                width: 1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primary.withValues(alpha: 0.22),
+                  blurRadius: 36,
+                  spreadRadius: 0,
+                  offset: const Offset(0, 10),
+                ),
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.10),
+                  blurRadius: 20,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: SafeArea(
+              child: SizedBox(
+                height: 70,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final itemWidth = constraints.maxWidth / _navItems.length;
+                    return Stack(
+                      children: [
+                        // Sliding gradient indicator bubble
+                        AnimatedPositioned(
+                          duration: const Duration(milliseconds: 380),
+                          curve: Curves.easeOutCubic,
+                          left: _currentIndex * itemWidth + 10,
+                          top: 9,
+                          width: itemWidth - 20,
+                          height: 52,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  AppColors.primary,
+                                  AppColors.primary.withValues(alpha: 0.80),
+                                ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              borderRadius: BorderRadius.circular(28),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppColors.primary.withValues(alpha: 0.50),
+                                  blurRadius: 18,
+                                  spreadRadius: 0,
+                                  offset: const Offset(0, 6),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        // Nav items
+                        Row(
+                          children: List.generate(_navItems.length, (i) {
+                            final item = _navItems[i];
+                            final isActive = _currentIndex == i;
+                            final badge = i == 2 ? unreadCount : 0;
+                            return _buildNavItem(
+                              theme: theme,
+                              item: item,
+                              index: i,
+                              isActive: isActive,
+                              badgeCount: badge,
+                              itemWidth: itemWidth,
+                              scaleAnim: _navScaleAnims[i],
+                              slideAnim: _navSlideAnims[i],
+                            );
+                          }),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildNavPill({
+  Widget _buildNavItem({
     required ThemeData theme,
     required _NavItemData item,
     required int index,
     required bool isActive,
     required int badgeCount,
+    required double itemWidth,
     required Animation<double> scaleAnim,
     required Animation<double> slideAnim,
   }) {
     return GestureDetector(
       onTap: () => _onNavTap(index),
       behavior: HitTestBehavior.opaque,
-      child: AnimatedBuilder(
-        animation: Listenable.merge([scaleAnim, slideAnim]),
-        builder: (context, child) {
-          return Transform.scale(
-            scale: scaleAnim.value,
-            child: Stack(
+      child: SizedBox(
+        width: itemWidth,
+        height: 70,
+        child: AnimatedBuilder(
+          animation: Listenable.merge([scaleAnim, slideAnim]),
+          builder: (context, _) {
+            return Stack(
+              alignment: Alignment.center,
               clipBehavior: Clip.none,
               children: [
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 350),
-                  curve: Curves.easeOutCubic,
-                  padding: EdgeInsets.symmetric(
-                    horizontal: isActive ? 20 : 14,
-                    vertical: 12,
-                  ),
-                  decoration: BoxDecoration(
-                    color: isActive
-                        ? AppColors.primary.withOpacity(0.15)
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 250),
-                        transitionBuilder: (child, anim) => ScaleTransition(
-                          scale: anim,
-                          child: FadeTransition(opacity: anim, child: child),
-                        ),
-                        child: Icon(
-                          isActive ? item.activeIcon : item.icon,
-                          key: ValueKey(isActive),
-                          color: isActive
-                              ? AppColors.primary
-                              : theme.colorScheme.onSurface.withOpacity(0.45),
-                          size: 24,
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Transform.scale(
+                      scale: 1.0 + (scaleAnim.value - 1.0) * 0.6,
+                      child: Icon(
+                        isActive ? item.activeIcon : item.icon,
+                        color: isActive
+                            ? Colors.white
+                            : theme.colorScheme.onSurface.withValues(alpha: 0.38),
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    SizedBox(
+                      height: 13,
+                      child: FadeTransition(
+                        opacity: slideAnim,
+                        child: Text(
+                          item.label,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 11,
+                            letterSpacing: 0.3,
+                          ),
                         ),
                       ),
-                      ClipRect(
-                        child: AnimatedSize(
-                          duration: const Duration(milliseconds: 300),
-                          curve: Curves.easeOutCubic,
-                          child: isActive
-                              ? Row(
-                                  children: [
-                                    const SizedBox(width: 8),
-                                    FadeTransition(
-                                      opacity: slideAnim,
-                                      child: Text(
-                                        item.label,
-                                        style: TextStyle(
-                                          color: AppColors.primary,
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 14,
-                                          letterSpacing: 0.3,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                )
-                              : const SizedBox.shrink(),
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
                 if (badgeCount > 0)
                   Positioned(
-                    right: isActive ? -2 : 2,
-                    top: 2,
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
+                    right: itemWidth * 0.18,
+                    top: 10,
+                    child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                       decoration: BoxDecoration(
                         color: Colors.red,
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: theme.colorScheme.surface, width: 2),
+                        border: Border.all(
+                          color: theme.colorScheme.surface,
+                          width: 1.5,
+                        ),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.red.withOpacity(0.4),
+                            color: Colors.red.withValues(alpha: 0.5),
                             blurRadius: 6,
                             offset: const Offset(0, 2),
                           ),
                         ],
                       ),
-                      constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
-                      child: Center(
-                        child: Text(
-                          badgeCount > 99 ? '99+' : '$badgeCount',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                          ),
+                      constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                      child: Text(
+                        badgeCount > 99 ? '99+' : '$badgeCount',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
                         ),
+                        textAlign: TextAlign.center,
                       ),
                     ),
                   ),
               ],
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
@@ -551,104 +594,131 @@ class _CallsPage extends ConsumerStatefulWidget {
 
 class _CallsPageState extends ConsumerState<_CallsPage>
     with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-  final List<String> _statuses = ['all', 'missed', 'completed', 'rejected'];
+  // IDs removed optimistically so Dismissible never sees them again.
+  final _deletedIds = <String>{};
 
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 4, vsync: this);
-    _tabController.addListener(() {
-      if (!_tabController.indexIsChanging) setState(() {});
+  /// Called by a tab body when a call is successfully deleted.
+  /// Removes the item synchronously so Flutter never finds a dismissed
+  /// Dismissible still in the tree, then re-syncs with the server.
+  void _onCallDeleted(String callId) {
+    setState(() => _deletedIds.add(callId));
+    // Defer the network invalidation to the next microtask so the
+    // synchronous setState rebuild happens first.
+    Future.microtask(() {
+      if (mounted) {
+        ref.invalidate(callsProvider);
+        ref.invalidate(callStatsProvider);
+      }
     });
   }
 
   @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  String get _currentStatus => _statuses[_tabController.index];
-
-  @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final callsAsync = ref.watch(
-      callsProvider(_currentStatus == 'all' ? null : _currentStatus),
-    );
+    // Single provider watch — ONE Riverpod listener for all four tabs.
+    final rawAsync = ref.watch(callsProvider(null));
+    // Filter out optimistically deleted items immediately.
+    final callsAsync = _deletedIds.isEmpty
+        ? rawAsync
+        : rawAsync.whenData(
+            (calls) => calls.where((c) => !_deletedIds.contains(c.id)).toList(),
+          );
 
     return Column(
       children: [
-        Container(
-          color: theme.scaffoldBackgroundColor,
-          child: TabBar(
-            controller: _tabController,
-            indicatorColor: AppColors.primary,
-            indicatorWeight: 3,
-            indicatorSize: TabBarIndicatorSize.label,
-            labelColor: AppColors.primary,
-            unselectedLabelColor: theme.colorScheme.onSurface.withOpacity(0.45),
-            labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-            unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 13),
-            tabs: const [
-              Tab(text: 'All'),
-              Tab(text: 'Missed'),
-              Tab(text: 'Completed'),
-              Tab(text: 'Rejected'),
-            ],
+        Align(
+          alignment: Alignment.centerRight,
+          child: IconButton(
+            icon: const Icon(Icons.delete_sweep_rounded, size: 20),
+            tooltip: 'Clear all history',
+            onPressed: _showDeleteAllDialog,
           ),
         ),
         Expanded(
-          child: TabBarView(
-            controller: _tabController,
-            children: _statuses.map((_) => _buildCallList(callsAsync, theme)).toList(),
+          child: _CallsTabBody(
+            status: null,
+            callsAsync: callsAsync,
+            onCallDeleted: _onCallDeleted,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildCallList(AsyncValue<List<CallModel>> callsAsync, ThemeData theme) {
-    return callsAsync.when(
-      data: (calls) {
-        if (calls.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(28),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.07),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.phone_disabled_rounded,
-                    size: 52,
-                    color: AppColors.primary.withOpacity(0.35),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Text(
-                  'No calls found',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: theme.colorScheme.onSurface.withOpacity(0.5),
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Your call history will appear here',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurface.withOpacity(0.3),
-                  ),
-                ),
-              ],
+  void _showDeleteAllDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Clear All Calls'),
+        content: const Text(
+            'This will permanently delete your entire call history.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
             ),
-          );
-        }
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                await ref.read(callServiceProvider).deleteAllCalls();
+                ref.invalidate(callsProvider);
+                ref.invalidate(callStatsProvider);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Call history cleared')),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error: $e')),
+                  );
+                }
+              }
+            },
+            child: const Text('Clear All'),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
+// Tab body receives pre-fetched data from parent — no provider watch here.
+class _CallsTabBody extends ConsumerStatefulWidget {
+  final String? status;
+  final AsyncValue<List<CallModel>> callsAsync;
+  final void Function(String callId) onCallDeleted;
+  const _CallsTabBody({
+    this.status,
+    required this.callsAsync,
+    required this.onCallDeleted,
+  });
+
+  @override
+  ConsumerState<_CallsTabBody> createState() => _CallsTabBodyState();
+}
+
+class _CallsTabBodyState extends ConsumerState<_CallsTabBody> {
+  String? get _currentUserId => SupabaseConfig.client.auth.currentUser?.id;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return widget.callsAsync.when(
+      data: (allCalls) {
+        final calls = widget.status == null
+            ? allCalls
+            : allCalls.where((c) => c.status == widget.status).toList();
+        if (calls.isEmpty) return _buildEmpty(theme);
         return RefreshIndicator(
           color: AppColors.primary,
           onRefresh: () async {
@@ -656,18 +726,17 @@ class _CallsPageState extends ConsumerState<_CallsPage>
             ref.invalidate(callStatsProvider);
           },
           child: ListView.builder(
-            padding: const EdgeInsets.symmetric(vertical: 12),
+            padding: const EdgeInsets.only(top: 12, bottom: 24),
             itemCount: calls.length,
             itemBuilder: (_, i) {
               final call = calls[i];
-              final isFirst = i == 0;
-              final showDateHeader =
-                  isFirst || !_isSameDay(calls[i - 1].createdAt, call.createdAt);
+              final showHeader = i == 0 ||
+                  !_isSameDay(calls[i - 1].createdAt, call.createdAt);
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (showDateHeader) _buildDateHeader(call.createdAt, theme),
-                  _buildCallTile(call, theme),
+                  if (showHeader) _buildDateHeader(call.createdAt, theme),
+                  _buildDismissibleTile(call, theme),
                 ],
               );
             },
@@ -675,46 +744,88 @@ class _CallsPageState extends ConsumerState<_CallsPage>
         );
       },
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.error_outline_rounded, size: 48, color: AppColors.error.withOpacity(0.6)),
-              const SizedBox(height: 16),
-              Text(
-                'Something went wrong',
-                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '$e',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: theme.colorScheme.onSurface.withOpacity(0.4), fontSize: 12),
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton.icon(
-                onPressed: () {
-                  ref.invalidate(callsProvider);
-                  ref.invalidate(callStatsProvider);
-                },
-                icon: const Icon(Icons.refresh_rounded),
-                label: const Text('Retry'),
-              ),
-            ],
-          ),
-        ),
-      ),
+      error: (e, _) => _buildError(e, theme),
     );
   }
 
   bool _isSameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
 
+  Widget _buildEmpty(ThemeData theme) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(28),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.07),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.phone_disabled_rounded,
+              size: 52,
+              color: AppColors.primary.withValues(alpha: 0.35),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'No calls found',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Your call history will appear here',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildError(Object e, ThemeData theme) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline_rounded,
+                size: 48, color: AppColors.error.withValues(alpha: 0.6)),
+            const SizedBox(height: 16),
+            Text('Something went wrong',
+                style: theme.textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            Text('$e',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    color:
+                        theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                    fontSize: 12)),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              onPressed: () {
+                ref.invalidate(callsProvider);
+                ref.invalidate(callStatsProvider);
+              },
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Retry'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildDateHeader(DateTime date, ThemeData theme) {
     final now = DateTime.now();
-    String label;
+    final String label;
     if (_isSameDay(date, now)) {
       label = 'Today';
     } else if (_isSameDay(date, now.subtract(const Duration(days: 1)))) {
@@ -723,73 +834,118 @@ class _CallsPageState extends ConsumerState<_CallsPage>
       label = DateFormat('MMMM d, yyyy').format(date);
     }
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 6),
-      child: Text(
-        label,
-        style: theme.textTheme.bodySmall?.copyWith(
-          color: theme.colorScheme.onSurface.withOpacity(0.4),
-          fontWeight: FontWeight.w600,
-          letterSpacing: 0.5,
-        ),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+      child: Row(
+        children: [
+          Text(
+            label,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.45),
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.6,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Divider(
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.08),
+              height: 1,
+            ),
+          ),
+        ],
       ),
     );
   }
 
+  Widget _buildDismissibleTile(CallModel call, ThemeData theme) {
+    return Dismissible(
+      key: ValueKey(call.id),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        decoration: BoxDecoration(
+          color: AppColors.error,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 22),
+        child: const Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.delete_rounded, color: Colors.white, size: 22),
+            SizedBox(height: 3),
+            Text('Delete',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700)),
+          ],
+        ),
+      ),
+      confirmDismiss: (_) async {
+        try {
+          await ref.read(callServiceProvider).deleteCall(call.id);
+          return true;
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Could not delete: $e')),
+            );
+          }
+          return false;
+        }
+      },
+      onDismissed: (_) => widget.onCallDeleted(call.id),
+      child: _buildCallTile(call, theme),
+    );
+  }
+
   Widget _buildCallTile(CallModel call, ThemeData theme) {
-    Color statusColor;
-    IconData statusIcon;
-    String statusLabel;
-
-    switch (call.status) {
-      case 'completed':
-        statusColor = AppColors.success;
-        statusIcon = Icons.call_received_rounded;
-        statusLabel = 'Completed';
-        break;
-      case 'missed':
-        statusColor = AppColors.error;
-        statusIcon = Icons.phone_missed_rounded;
-        statusLabel = 'Missed';
-        break;
-      case 'rejected':
-        statusColor = AppColors.warning;
-        statusIcon = Icons.call_end_rounded;
-        statusLabel = 'Rejected';
-        break;
-      case 'cancelled':
-        statusColor = AppColors.textTertiary;
-        statusIcon = Icons.cancel_rounded;
-        statusLabel = 'Cancelled';
-        break;
-      default:
-        statusColor = AppColors.textSecondary;
-        statusIcon = Icons.help_rounded;
-        statusLabel = call.status;
-    }
-
+    final (statusColor, statusIcon, statusLabel) = _statusInfo(call.status);
     final isVideo = call.callType == 'video';
+    final isOutgoing = call.callerId == _currentUserId;
+    final displayName = isOutgoing
+        ? (call.receiverName ?? 'Unknown')
+        : (call.callerName ?? 'Unknown');
+    final avatarUrl = isOutgoing ? call.receiverAvatar : call.callerAvatar;
 
-    return InkWell(
-      onLongPress: () => _showDeleteDialog(call),
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.07),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         child: Row(
           children: [
+            // ── Avatar with call-type badge ─────────────────────────────────
             Stack(
               children: [
                 CircleAvatar(
-                  radius: 28,
-                  backgroundColor: AppColors.primary.withOpacity(0.1),
-                  backgroundImage: call.callerAvatar != null
-                      ? CachedNetworkImageProvider(call.callerAvatar!)
+                  radius: 26,
+                  backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                  backgroundImage: avatarUrl != null
+                      ? CachedNetworkImageProvider(avatarUrl)
                       : null,
-                  child: call.callerAvatar == null
+                  child: avatarUrl == null
                       ? Text(
-                          call.callerName?.isNotEmpty == true
-                              ? call.callerName![0].toUpperCase()
+                          displayName.isNotEmpty
+                              ? displayName[0].toUpperCase()
                               : '?',
-                          style: TextStyle(
-                            fontSize: 20,
+                          style: const TextStyle(
+                            fontSize: 18,
                             fontWeight: FontWeight.bold,
                             color: AppColors.primary,
                           ),
@@ -802,77 +958,91 @@ class _CallsPageState extends ConsumerState<_CallsPage>
                   child: Container(
                     padding: const EdgeInsets.all(3),
                     decoration: BoxDecoration(
-                      color: isVideo ? AppColors.chartPurple : AppColors.chartBlue,
+                      color: isVideo
+                          ? AppColors.chartPurple
+                          : AppColors.chartBlue,
                       shape: BoxShape.circle,
-                      border: Border.all(color: theme.scaffoldBackgroundColor, width: 2),
+                      border: Border.all(
+                          color: theme.scaffoldBackgroundColor, width: 2),
                     ),
                     child: Icon(
-                      isVideo ? Icons.videocam_rounded : Icons.phone_rounded,
-                      size: 10,
+                      isVideo
+                          ? Icons.videocam_rounded
+                          : Icons.phone_rounded,
+                      size: 9,
                       color: Colors.white,
                     ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(width: 14),
+            const SizedBox(width: 12),
+
+            // ── Name + status badge ─────────────────────────────────────────
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    call.callerName ?? 'Unknown',
-                    style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 3),
                   Row(
                     children: [
-                      Icon(statusIcon, size: 13, color: statusColor),
+                      Icon(
+                        isOutgoing
+                            ? Icons.call_made_rounded
+                            : Icons.call_received_rounded,
+                        size: 13,
+                        color: isOutgoing
+                            ? AppColors.primary.withValues(alpha: 0.65)
+                            : statusColor.withValues(alpha: 0.8),
+                      ),
                       const SizedBox(width: 4),
-                      Text(
-                        statusLabel,
-                        style: TextStyle(fontSize: 12, color: statusColor, fontWeight: FontWeight.w500),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 6),
-                        child: Text(
-                          '·',
-                          style: TextStyle(color: theme.colorScheme.onSurface.withOpacity(0.3)),
-                        ),
-                      ),
                       Expanded(
                         child: Text(
-                          '→ ${call.receiverName ?? 'Unknown'}',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurface.withOpacity(0.45),
-                          ),
+                          displayName,
+                          style: theme.textTheme.titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w700),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
                   ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      _statusBadge(statusColor, statusIcon, statusLabel),
+                      if (call.duration != null && call.duration! > 0) ...[
+                        const SizedBox(width: 6),
+                        Icon(Icons.timer_outlined,
+                            size: 11,
+                            color: theme.colorScheme.onSurface
+                                .withValues(alpha: 0.35)),
+                        const SizedBox(width: 3),
+                        Text(
+                          call.formatDuration(),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: theme.colorScheme.onSurface
+                                .withValues(alpha: 0.45),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ],
               ),
             ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  DateFormat('h:mm a').format(call.createdAt),
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    fontSize: 11,
-                    color: theme.colorScheme.onSurface.withOpacity(0.38),
-                  ),
+
+            // ── Time ───────────────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: Text(
+                DateFormat('h:mm a').format(call.createdAt),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontSize: 11,
+                  color:
+                      theme.colorScheme.onSurface.withValues(alpha: 0.38),
                 ),
-                const SizedBox(height: 4),
-                if (call.duration != null && call.duration! > 0)
-                  Text(
-                    call.formatDuration(),
-                    style: TextStyle(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.w500),
-                  )
-                else
-                  Icon(Icons.delete_outline_rounded, size: 16, color: AppColors.error.withOpacity(0.45)),
-              ],
+              ),
             ),
           ],
         ),
@@ -880,46 +1050,35 @@ class _CallsPageState extends ConsumerState<_CallsPage>
     );
   }
 
-  void _showDeleteDialog(CallModel call) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Delete Call'),
-        content: const Text('Are you sure you want to delete this call record?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.error,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            onPressed: () async {
-              try {
-                await ref.read(callServiceProvider).deleteCall(call.id);
-                ref.invalidate(callsProvider);
-                ref.invalidate(callStatsProvider);
-                if (mounted) {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context)
-                      .showSnackBar(const SnackBar(content: Text('Call deleted')));
-                }
-              } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context)
-                      .showSnackBar(SnackBar(content: Text('Error: $e')));
-                }
-              }
-            },
-            child: const Text('Delete'),
-          ),
+  Widget _statusBadge(Color color, IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 10, color: color),
+          const SizedBox(width: 4),
+          Text(label,
+              style: TextStyle(
+                  fontSize: 10, color: color, fontWeight: FontWeight.w700)),
         ],
       ),
     );
+  }
+
+  (Color, IconData, String) _statusInfo(String status) {
+    return switch (status) {
+      'completed' => (AppColors.success,      Icons.call_received_rounded, 'Completed'),
+      'missed'    => (AppColors.error,         Icons.phone_missed_rounded,  'Missed'),
+      'rejected'  => (AppColors.warning,       Icons.call_end_rounded,      'Rejected'),
+      'cancelled' => (AppColors.textTertiary,  Icons.cancel_rounded,        'Cancelled'),
+      'ringing'   => (AppColors.info,          Icons.phone_in_talk_rounded, 'Ringing'),
+      _           => (AppColors.textSecondary, Icons.help_rounded,          status),
+    };
   }
 }
 

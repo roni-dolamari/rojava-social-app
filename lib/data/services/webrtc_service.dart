@@ -14,7 +14,6 @@ class WebRTCService {
   bool _remoteDescriptionSet = false;
   bool _isDisposed = false;
 
-  // Buffer ICE candidates until remote description is set
   final List<RTCIceCandidate> _iceCandidateBuffer = [];
 
   final _localStreamController = StreamController<MediaStream>.broadcast();
@@ -72,7 +71,6 @@ class WebRTCService {
     String callId,
     String receiverId,
   ) async {
-    // Close any existing connection first
     await _peerConnection?.close();
     _peerConnection = null;
 
@@ -140,7 +138,6 @@ class WebRTCService {
     return pc;
   }
 
-  // Add ICE candidate — buffer if remote description not set yet
   Future<void> _addIceCandidate(RTCIceCandidate candidate) async {
     if (_peerConnection == null || _isEnding || _isDisposed) return;
 
@@ -157,7 +154,6 @@ class WebRTCService {
     }
   }
 
-  // Flush buffered ICE candidates after remote description is set
   Future<void> _flushIceCandidates() async {
     if (_peerConnection == null) return;
     print('🧊 Flushing ${_iceCandidateBuffer.length} buffered ICE candidates');
@@ -174,7 +170,6 @@ class WebRTCService {
     }
   }
 
-  // Set remote description and flush buffered candidates
   Future<void> _setRemoteDescription(RTCSessionDescription desc) async {
     final pc = _peerConnection;
     if (pc == null) {
@@ -193,7 +188,6 @@ class WebRTCService {
     }
   }
 
-  // CALLER: Start a call
   Future<void> startCall({
     required String callId,
     required String receiverId,
@@ -206,7 +200,6 @@ class WebRTCService {
     await initLocalStream(video: isVideo);
     await _createPeerConnection(callId, receiverId);
 
-    // Listen BEFORE sending offer
     _listenForSignals(callId: callId, isCaller: true, otherUserId: receiverId);
 
     final pc = _peerConnection;
@@ -224,7 +217,6 @@ class WebRTCService {
     print('✅ Offer sent to $receiverId');
   }
 
-  // RECEIVER: Answer a call
   Future<void> answerCall({
     required String callId,
     required String callerId,
@@ -238,7 +230,6 @@ class WebRTCService {
     await initLocalStream(video: isVideo);
     await _createPeerConnection(callId, callerId);
 
-    // Set remote description (offer) immediately
     await _setRemoteDescription(offer);
 
     final pc = _peerConnection;
@@ -247,7 +238,6 @@ class WebRTCService {
     final answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
 
-    // Listen BEFORE sending answer
     _listenForSignals(callId: callId, isCaller: false, otherUserId: callerId);
 
     await _sendSignal(

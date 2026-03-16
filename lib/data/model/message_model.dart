@@ -11,7 +11,7 @@ class MessageModel {
   final double? locationLat;
   final double? locationLng;
   final String? locationAddress;
-  final DateTime? liveLocationExpiresAt; // null = not live
+  final DateTime? liveLocationExpiresAt;
   final String? replyTo;
   final bool isEdited;
   final bool isDeleted;
